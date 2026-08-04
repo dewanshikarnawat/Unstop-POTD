@@ -1,0 +1,167 @@
+//Problem: Kingdom Alliance Timeline
+//Topic: DSU (Disjoint Set Union) + Rollback DSU + Segment Tree over Time (Offline Dynamic Connectivity)
+//Pattern: Hard
+
+#include <cmath>
+#include <cstdio>
+#include <vector>
+#include <iostream>
+#include <algorithm>
+using namespace std;
+
+struct Edge {
+    int u, v;
+};
+
+struct Query {
+    int u, v, id;
+};
+
+struct DSU {
+    vector<int> p, sz;
+    vector<pair<int,int>> st;
+
+    DSU(int n){
+        p.resize(n+1);
+        sz.assign(n+1,1);
+        for(int i=1;i<=n;i++) p[i]=i;
+    }
+
+    int find(int x){
+        while(x!=p[x]) x=p[x];
+        return x;
+    }
+
+    void unite(int a,int b){
+        a=find(a);
+        b=find(b);
+        if(a==b){
+            st.push_back({-1,-1});
+            return;
+        }
+        if(sz[a]<sz[b]) swap(a,b);
+        p[b]=a;
+        sz[a]+=sz[b];
+        st.push_back({a,b});
+    }
+
+    int snapshot(){
+        return st.size();
+    }
+
+    void rollback(int snap){
+        while((int)st.size()>snap){
+            auto cur=st.back();
+            st.pop_back();
+            if(cur.first==-1) continue;
+            int a=cur.first,b=cur.second;
+            sz[a]-=sz[b];
+            p[b]=b;
+        }
+    }
+};
+
+vector<vector<Edge>> seg;
+vector<vector<Query>> leafQueries;
+vector<string> ans;
+DSU *dsu;
+
+void addEdge(int idx,int l,int r,int ql,int qr,Edge e){
+    if(ql>r||qr<l) return;
+    if(ql<=l&&r<=qr){
+        seg[idx].push_back(e);
+        return;
+    }
+    int mid=(l+r)>>1;
+    addEdge(idx<<1,l,mid,ql,qr,e);
+    addEdge(idx<<1|1,mid+1,r,ql,qr,e);
+}
+
+void dfs(int idx,int l,int r){
+    int snap=dsu->snapshot();
+
+    for(auto &e:seg[idx])
+        dsu->unite(e.u,e.v);
+
+    if(l==r){
+        for(auto &q:leafQueries[l]){
+            ans[q.id]=(dsu->find(q.u)==dsu->find(q.v))?"YES":"NO";
+        }
+    }else{
+        int mid=(l+r)>>1;
+        dfs(idx<<1,l,mid);
+        dfs(idx<<1|1,mid+1,r);
+    }
+
+    dsu->rollback(snap);
+}
+
+struct EInput{
+    int u,v,l,r;
+};
+
+struct QInput{
+    int u,v,t;
+};
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int N;
+    cin>>N;
+
+    int M;
+    cin>>M;
+
+    vector<EInput> edges(M);
+    vector<int> coord;
+
+    for(int i=0;i<M;i++){
+        cin>>edges[i].u>>edges[i].v>>edges[i].l>>edges[i].r;
+        coord.push_back(edges[i].l);
+        coord.push_back(edges[i].r+1);
+    }
+
+    int Q;
+    cin>>Q;
+
+    vector<QInput> queries(Q);
+
+    for(int i=0;i<Q;i++){
+        cin>>queries[i].u>>queries[i].v>>queries[i].t;
+        coord.push_back(queries[i].t);
+    }
+
+    sort(coord.begin(),coord.end());
+    coord.erase(unique(coord.begin(),coord.end()),coord.end());
+
+    int K=coord.size();
+
+    seg.assign(4*K+5,{});
+    leafQueries.assign(K,{});
+    ans.assign(Q,"");
+
+    auto getPos=[&](int x){
+        return lower_bound(coord.begin(),coord.end(),x)-coord.begin();
+    };
+
+    for(auto &e:edges){
+        int l=getPos(e.l);
+        int r=getPos(e.r+1)-1;
+        if(l<=r)
+            addEdge(1,0,K-1,l,r,{e.u,e.v});
+    }
+
+    for(int i=0;i<Q;i++){
+        int pos=getPos(queries[i].t);
+        leafQueries[pos].push_back({queries[i].u,queries[i].v,i});
+    }
+
+    dsu=new DSU(N);
+    dfs(1,0,K-1);
+
+    for(auto &s:ans)
+        cout<<s<<"\n";  
+    return 0;
+}
